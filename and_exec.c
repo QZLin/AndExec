@@ -1,17 +1,17 @@
 #include <process.h>
 #include <windows.h>
 #include <wchar.h>
+#include <stdbool.h>
+
+#pragma comment(linker,"/SUBSYSTEM:WINDOWS")
 
 void WinMainCRTStartup(void)
 {
-	STARTUPINFO startupInfo;
-	PROCESS_INFORMATION processInfo;
-	DWORD exitcode = 0;
 
-	LPWSTR pCmd = GetCommandLine();
-	UINT64 pCmdLen = wcslen(pCmd);
+	LPWSTR fullCmd = GetCommandLine();
+	UINT64 fullCmdLen = wcslen(fullCmd);
 	LPWSTR workingDir = NULL;
-	int waitExit = 0;
+	bool waitExit = 0;
 
 	enum ArgType {
 		ARG_NOT = 0,
@@ -21,24 +21,46 @@ void WinMainCRTStartup(void)
 	};
 	enum ArgType nextArg = ARG_SELF;
 
-	LPWSTR cmdl = malloc((pCmdLen + 1) * sizeof(WCHAR));
+	LPWSTR realCmd = malloc((fullCmdLen + 1) * sizeof(wchar_t));
+	UINT realCmdLen = 0;
+
+	LPWSTR cmdl = malloc((fullCmdLen + 1) * sizeof(WCHAR));
 	UINT64 p_cmdl = 0;
 
+	// Remove args part of self
 	int self_head_hit = 0;
 	int non_space_hit = 0;
-	for (UINT64 i = 0; i < pCmdLen; i++) {
-		WCHAR c = pCmd[i];
+	for (UINT64 i = 0; i < fullCmdLen; i++) {
+		WCHAR c = fullCmd[i];
 
-		if (nextArg == ARG_SELF) {
-			if (c == '"')
-				self_head_hit++;
-			if (self_head_hit == 2)
-				nextArg = ARG_NOT;
+		//if (nextArg == ARG_SELF) {
+		if (c == '"')
+			self_head_hit++;
+		if (self_head_hit == 2) {
+			//nextArg = ARG_NOT;
+			//wcscpy_s(realCmd,(pCmdLen+1)* sizeof(wchar_t),pCmd);
+			realCmdLen = fullCmdLen - i - 1;
+			wmemcpy_s(realCmd, (fullCmdLen + 1) * sizeof(wchar_t), fullCmd + i + 1, realCmdLen);
+			if (realCmd[0] == ' ') {
+				realCmd++;
+				realCmdLen -= 1;
+			}
+			realCmd[realCmdLen] = '\0';
+			break;
 		}
-		else if (c == '-' && (i == 0 || pCmd[i - 1] == ' ') && (i == 0 || pCmd[i - 1] != '\\')) {
-			switch (pCmd[i + 1]) {
+	}
+#define L_IS(index,value) ((int)index-1>0 && realCmd[index-1]==value)
+#define N_IS(index,value) ((int)index+1<realCmdLen && realCmd[index+1]==value)
+	bool quotation_hit = false;
+	nextArg = ARG_NOT;
+	for (UINT i = 0; i < realCmdLen; i++) {
+		WCHAR c = realCmd[i];
+		if (c == '"')
+			quotation_hit = true;
+		if (!quotation_hit && c == '-' && !L_IS(i, '\\') && i + 1 < realCmdLen) {
+			switch (realCmd[i + 1]) {
 			case 'w':
-				waitExit = TRUE;
+				waitExit = true;
 				nextArg = ARG_NOT;
 				i++;
 				break;
@@ -48,15 +70,15 @@ void WinMainCRTStartup(void)
 				break;
 			}
 		}
-		else if (nextArg != ARG_NOT && c == ' ' && (i == 0 || pCmd[i - 1] != '\\')) {
+		else if (nextArg != ARG_NOT && c == ' ' && !L_IS(i, '\\')) {
 			UINT64 index_start = i + 1;
-			UINT64 len = pCmdLen - index_start;
+			UINT64 len = realCmdLen - index_start;
 			WCHAR* arg_unit = malloc((len + 1) * sizeof(WCHAR));
 
 			UINT64 j;
 			for (j = 0; j < len; j++) {
-				arg_unit[j] = pCmd[index_start + j];
-				if (pCmd[index_start + j + 1] == ' ') {
+				arg_unit[j] = realCmd[index_start + j];
+				if (realCmd[index_start + j + 1] == ' ') {
 					arg_unit = realloc(arg_unit, (j + 2) * sizeof(WCHAR));
 					break;
 				}
@@ -72,8 +94,8 @@ void WinMainCRTStartup(void)
 			}
 			nextArg = ARG_NOT;
 		}
-		else if (nextArg == ARG_NOT) {
-			if (nextArg != ARG_SELF && non_space_hit == 0 && c != ' ') non_space_hit++;
+		if (nextArg == ARG_NOT) {
+			if (non_space_hit == 0 && c != ' ') non_space_hit++;
 			if (non_space_hit > 0) {
 				cmdl[p_cmdl] = c;
 				p_cmdl++;
@@ -82,45 +104,16 @@ void WinMainCRTStartup(void)
 		}
 	}
 	cmdl[p_cmdl] = '\0';
-	//cmdl = realloc(cmdl, p_cmdl * sizeof(WCHAR));
 
-	//MessageBox(0, workingDir, L"test", 0);
-	/*if (pCmd[0] == '"') stopchar = '"';
-	do {
-		pCmd++;
-	} while ((pCmd[0] != stopchar) && (pCmd[0] != 0));
-	if (pCmd[0] != 0)
-	{
-		do {
-			pCmd++;
-		} while ((pCmd[0] != 0) && ((pCmd[0] == ' ') || (pCmd[0] == 't')));
-	};
-	if (pCmd[0] == 0)
-	{
-		MessageBox(0,
-			L"About:\n\nhidec hides console window of started program & waits (opt.) for its termination\n\n"
-			L"Usage:\n\n\thidec [/w] <filename>\n\nWhere:\n\n"
-			L"/w\twait for program termination\nfilename\texecutable file name",
-
-			L"Error: Incorrect usage"
-			, 0);
-		ExitProcess(0);
-	};
-
-	if ((pCmd[0] == '/') && (((pCmd[1]) | 0x20) == 'w') && (pCmd[2] == ' '))
-	{
-		bWait = 1;
-		pCmd += 3;
-	};
-	while ((pCmd[0] != 0) && ((pCmd[0] == ' ') || (pCmd[0] == 't'))) pCmd++;*/
-
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+	ZeroMemory(&si, sizeof(si));
+	ZeroMemory(&pi, sizeof(pi));
+	DWORD exitcode = 0;
 	/* create process with new console */
-	unsigned char* ps = (unsigned char*)&startupInfo;
-	for (unsigned int i = 0; i < sizeof(startupInfo); i++) ps[i] = 0x00;
-
-	startupInfo.cb = sizeof(startupInfo);
-	startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-	startupInfo.wShowWindow = SW_HIDE;
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESHOWWINDOW;
+	si.wShowWindow = SW_HIDE;
 	/*
 	  BOOL CreateProcessW(
 	  [in, optional]      LPCWSTR               lpApplicationName,
@@ -140,21 +133,19 @@ void WinMainCRTStartup(void)
 	);
 	*/
 
-	//LPWSTR test = L"node node-server.js 6880";
 	if (CreateProcess(
 		NULL, cmdl,
 		NULL, NULL,
 		FALSE, CREATE_NEW_CONSOLE,
 		NULL, workingDir,
-		&startupInfo, &processInfo
+		&si, &pi
 	))
 	{
-		if (waitExit) WaitForSingleObject(processInfo.hProcess, INFINITE);
-		CloseHandle(processInfo.hProcess);
-		CloseHandle(processInfo.hThread);
+		if (waitExit) WaitForSingleObject(pi.hProcess, INFINITE);
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
 	}
 	else exitcode = GetLastError();
 
-	/* terminate this */
 	ExitProcess(exitcode);
 }
