@@ -3,9 +3,9 @@
 #include <wchar.h>
 #include <stdbool.h>
 
-#pragma comment(linker,"/SUBSYSTEM:WINDOWS")
+//#pragma comment(linker,"/SUBSYSTEM:WINDOWS")
 
-void WinMainCRTStartup(void)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
 
 	LPWSTR fullCmd = GetCommandLine();
