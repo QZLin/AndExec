@@ -3,7 +3,60 @@
 #include <wchar.h>
 #include <stdbool.h>
 
-//#pragma comment(linker,"/SUBSYSTEM:WINDOWS")
+bool validChar(LPWSTR str, WCHAR character, UINT64 index) {
+	if (str[index] == character) {
+		if (index == 0) return true;
+	}
+	else return false;
+	if (validChar(str, '\\', index - 1))
+		return false;
+	return true;
+}
+
+PWSTR extractString(PWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
+	UINT64 str_len = wcslen(str);
+
+	LPWSTR result = NULL;
+	WCHAR symbol;
+	int sub_start;
+	int sub_end = 0;
+	UINT64 index = startIndex;
+	if (str[startIndex] == '"') {
+		symbol = '"';
+		index++;
+		sub_start = 1;
+	}
+	else if (str[startIndex] == '\'') {
+		symbol = '\'';
+		index++;
+		sub_start = 1;
+	}
+	else {
+		symbol = ' ';
+		sub_start = 0;
+	}
+
+	while (true) {
+		if (index >= str_len) break;
+		WCHAR c = str[index];
+		if (c == symbol && validChar(str, symbol, index)) {
+			sub_end = 1;
+			break;
+		}
+		index++;
+	}
+	*endIndex = index + sub_end;
+	UINT64 result_size = ((index - sub_end) - (startIndex + sub_start) + 1) * sizeof(WCHAR);
+	result = malloc(result_size + sizeof(WCHAR));
+
+	UINT64 p_result = 0;
+	for (UINT64 i = startIndex + sub_start; i < index - sub_end + 1; i++) {
+		result[p_result] = str[i];
+		p_result++;
+	}
+	result[p_result] = '\0';
+	return result;
+}
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
@@ -21,10 +74,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	};
 	enum ArgType nextArg = ARG_SELF;
 
-	LPWSTR realCmd = malloc((fullCmdLen + 1) * sizeof(wchar_t));
-	UINT realCmdLen = 0;
+	LPWSTR realCmd = malloc((fullCmdLen + 1) * sizeof(WCHAR));
+	UINT p_realCmd = 0;
 
-	LPWSTR cmdl = malloc((fullCmdLen + 1) * sizeof(WCHAR));
+	UINT64 cmdlSize = (fullCmdLen + 1) * sizeof(WCHAR);
+	LPWSTR cmdl = malloc(cmdlSize);
 	UINT64 p_cmdl = 0;
 
 	// Remove args part of self
@@ -39,25 +93,25 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		if (self_head_hit == 2) {
 			//nextArg = ARG_NOT;
 			//wcscpy_s(realCmd,(pCmdLen+1)* sizeof(wchar_t),pCmd);
-			realCmdLen = fullCmdLen - i - 1;
-			wmemcpy_s(realCmd, (fullCmdLen + 1) * sizeof(wchar_t), fullCmd + i + 1, realCmdLen);
+			p_realCmd = fullCmdLen - i - 1;
+			wmemcpy_s(realCmd, (fullCmdLen + 1) * sizeof(WCHAR), fullCmd + i + 1, p_realCmd);
 			if (realCmd[0] == ' ') {
 				realCmd++;
-				realCmdLen -= 1;
+				p_realCmd -= 1;
 			}
-			realCmd[realCmdLen] = '\0';
+			realCmd[p_realCmd] = '\0';
 			break;
 		}
 	}
 #define L_IS(index,value) ((int)index-1>0 && realCmd[index-1]==value)
-#define N_IS(index,value) ((int)index+1<realCmdLen && realCmd[index+1]==value)
+#define N_IS(index,value) ((int)index+1<p_realCmd && realCmd[index+1]==value)
 	bool quotation_hit = false;
 	nextArg = ARG_NOT;
-	for (UINT i = 0; i < realCmdLen; i++) {
+	for (UINT i = 0; i < p_realCmd; i++) {
 		WCHAR c = realCmd[i];
 		if (c == '"')
 			quotation_hit = true;
-		if (!quotation_hit && c == '-' && !L_IS(i, '\\') && i + 1 < realCmdLen) {
+		if (!quotation_hit && c == '-' && !L_IS(i, '\\') && i + 1 < p_realCmd) {
 			switch (realCmd[i + 1]) {
 			case 'w':
 				waitExit = true;
@@ -72,8 +126,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		}
 		else if (nextArg != ARG_NOT && c == ' ' && !L_IS(i, '\\')) {
 			UINT64 index_start = i + 1;
-			UINT64 len = realCmdLen - index_start;
-			WCHAR* arg_unit = malloc((len + 1) * sizeof(WCHAR));
+			UINT64 len = p_realCmd - index_start;
+			PWSTR arg_unit = malloc((len + 1) * sizeof(WCHAR));
 
 			UINT64 j;
 			for (j = 0; j < len; j++) {
@@ -103,6 +157,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			}
 		}
 	}
+	if (cmdl == NULL) { exit(2); }
 	cmdl[p_cmdl] = '\0';
 
 	STARTUPINFO si;
