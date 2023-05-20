@@ -37,15 +37,18 @@ PWSTR extractString(PWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
 	}
 
 	while (true) {
-		if (index >= str_len) break;
+		if (index >= str_len) {
+			*endIndex = index - 1;
+			break;
+		}
 		WCHAR c = str[index];
 		if (c == symbol && validChar(str, symbol, index)) {
+			*endIndex = index;
 			sub_end = 1;
 			break;
 		}
 		index++;
 	}
-	*endIndex = index + sub_end;
 	UINT64 result_size = ((index - sub_end) - (startIndex + sub_start) + 1) * sizeof(WCHAR);
 	result = malloc(result_size + sizeof(WCHAR));
 
@@ -60,62 +63,92 @@ PWSTR extractString(PWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
+	UINT cmdLineLen = wcslen(pCmdLine);
 
 	LPWSTR fullCmd = GetCommandLine();
 	UINT64 fullCmdLen = wcslen(fullCmd);
-	LPWSTR workingDir = NULL;
-	bool waitExit = 0;
 
 	enum ArgType {
-		ARG_NOT = 0,
+		ARG_NONE = 0,
 		ARG_WORKDIR,
 		ARG_FLAG,
 		ARG_SELF
 	};
-	enum ArgType nextArg = ARG_SELF;
+	enum ArgType nextArg = ARG_NONE;
+	LPWSTR workingDir = NULL;
+	bool waitExit = false;
+
+
 
 	LPWSTR realCmd = malloc((fullCmdLen + 1) * sizeof(WCHAR));
 	UINT p_realCmd = 0;
 
-	UINT64 cmdlSize = (fullCmdLen + 1) * sizeof(WCHAR);
+	// cmd /k ping localhost
+	// "cmd /k ping localhost"
+	// cmd /k "ping localhost"
+	// -d "C:\Program Files" -w cmd /k ping localhost
+	// -d . -w cmd /k ping localhost
+	// -w cmd /k ping localhost
+
+	pCmdLine = __TEXT("cmd /k ping localhost");
+	LPWSTR commandLine = NULL;
+	for (UINT64 i = 0; i < cmdLineLen; ) {
+		UINT64 end = 0;
+		PWSTR value = extractString(pCmdLine, i, &end);
+
+		if (nextArg != ARG_NONE) {
+			switch (nextArg) {
+			case ARG_WORKDIR:
+				workingDir = value;
+				break;
+			default:
+				free(value);
+			}
+		}
+		else if (value[0] == '-') {
+			switch (value[1]) {
+			case 'w':
+				waitExit = true;
+				nextArg = ARG_NONE;
+				break;
+			case 'd':
+				nextArg = ARG_WORKDIR;
+				break;
+			}
+		}
+		// options end
+		else if (validChar(pCmdLine, '"', i)) {
+			commandLine = value;
+			break;
+		}
+		else {
+			commandLine = malloc((cmdLineLen - i + 1) * sizeof(WCHAR));
+			UINT64 j;
+			for (j = 0; i + j < cmdLineLen; j++) commandLine[j] = pCmdLine[i + j];
+			commandLine[j] = '\0';
+			break;
+		}
+		i = end + 1;
+	}
+
+	UINT64 cmdlSize = (cmdLineLen + 1) * sizeof(WCHAR);
 	LPWSTR cmdl = malloc(cmdlSize);
 	UINT64 p_cmdl = 0;
 
-	// Remove args part of self
-	int self_head_hit = 0;
-	int non_space_hit = 0;
-	for (UINT64 i = 0; i < fullCmdLen; i++) {
-		WCHAR c = fullCmd[i];
 
-		//if (nextArg == ARG_SELF) {
-		if (c == '"')
-			self_head_hit++;
-		if (self_head_hit == 2) {
-			//nextArg = ARG_NOT;
-			//wcscpy_s(realCmd,(pCmdLen+1)* sizeof(wchar_t),pCmd);
-			p_realCmd = fullCmdLen - i - 1;
-			wmemcpy_s(realCmd, (fullCmdLen + 1) * sizeof(WCHAR), fullCmd + i + 1, p_realCmd);
-			if (realCmd[0] == ' ') {
-				realCmd++;
-				p_realCmd -= 1;
-			}
-			realCmd[p_realCmd] = '\0';
-			break;
-		}
-	}
-#define L_IS(index,value) ((int)index-1>0 && realCmd[index-1]==value)
-#define N_IS(index,value) ((int)index+1<p_realCmd && realCmd[index+1]==value)
-	bool quotation_hit = false;
-	nextArg = ARG_NOT;
-	for (UINT i = 0; i < p_realCmd; i++) {
-		WCHAR c = realCmd[i];
-		if (c == '"')
-			quotation_hit = true;
-		if (!quotation_hit && c == '-' && !L_IS(i, '\\') && i + 1 < p_realCmd) {
-			switch (realCmd[i + 1]) {
+
+
+
+	//int self_head_hit = 0;
+	//int non_space_hit = 0;
+	for (UINT64 i = 0; i < cmdLineLen; i++) {
+		//WCHAR c = pCmdLine[i];
+
+		if (validChar(pCmdLine, '-', i)) {
+			switch (pCmdLine[i + 1]) {
 			case 'w':
 				waitExit = true;
-				nextArg = ARG_NOT;
+				nextArg = ARG_NONE;
 				i++;
 				break;
 			case 'd':
@@ -124,7 +157,45 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 				break;
 			}
 		}
-		else if (nextArg != ARG_NOT && c == ' ' && !L_IS(i, '\\')) {
+		else if (nextArg != ARG_NONE) {
+
+			UINT64 end = 0;
+			PWSTR value = extractString(pCmdLine, i, &end);
+
+			switch (nextArg) {
+			case ARG_WORKDIR:
+				workingDir = value;
+				break;
+			default:
+				free(value);
+			}
+			nextArg = ARG_NONE;
+			i += end;
+		}
+	}
+	/*
+#define L_IS(index,value) ((int)index-1>0 && realCmd[index-1]==value)
+#define N_IS(index,value) ((int)index+1<p_realCmd && realCmd[index+1]==value)
+	bool quotation_hit = false;
+	nextArg = ARG_NONE;
+	for (UINT i = 0; i < p_realCmd; i++) {
+		WCHAR c = realCmd[i];
+		if (c == '"')
+			quotation_hit = true;
+		if (!quotation_hit && c == '-' && !L_IS(i, '\\') && i + 1 < p_realCmd) {
+			switch (realCmd[i + 1]) {
+			case 'w':
+				waitExit = true;
+				nextArg = ARG_NONE;
+				i++;
+				break;
+			case 'd':
+				nextArg = ARG_WORKDIR;
+				i++;
+				break;
+			}
+		}
+		else if (nextArg != ARG_NONE && c == ' ' && !L_IS(i, '\\')) {
 			UINT64 index_start = i + 1;
 			UINT64 len = p_realCmd - index_start;
 			PWSTR arg_unit = malloc((len + 1) * sizeof(WCHAR));
@@ -146,19 +217,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			default:
 				free(arg_unit);
 			}
-			nextArg = ARG_NOT;
+			nextArg = ARG_NONE;
 		}
-		if (nextArg == ARG_NOT) {
+		if (nextArg == ARG_NONE) {
 			if (non_space_hit == 0 && c != ' ') non_space_hit++;
 			if (non_space_hit > 0) {
 				cmdl[p_cmdl] = c;
 				p_cmdl++;
-				//cmdl[p_cmdl] = '\0';
+				cmdl[p_cmdl] = '\0';
 			}
 		}
 	}
 	if (cmdl == NULL) { exit(2); }
-	cmdl[p_cmdl] = '\0';
+	cmdl[p_cmdl] = '\0';*/
 
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
