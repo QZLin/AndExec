@@ -3,15 +3,7 @@
 #include <wchar.h>
 #include <stdbool.h>
 
-bool validChar(LPWSTR str, WCHAR character, UINT64 index) {
-	if (str[index] == character) {
-		if (index == 0) return true;
-	}
-	else return false;
-	if (validChar(str, '\\', index - 1))
-		return false;
-	return true;
-}
+
 
 LPWSTR subString(LPWSTR str, UINT64 startIndex, UINT64 endIndex) {
 	LPWSTR result = malloc((endIndex - startIndex + 1) * sizeof(WCHAR));
@@ -21,10 +13,19 @@ LPWSTR subString(LPWSTR str, UINT64 startIndex, UINT64 endIndex) {
 	return result;
 }
 
-LPWSTR extractString(LPWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
+bool validArgChar(LPWSTR str, WCHAR character, UINT64 index) {
+	if (str[index] == character) {
+		if (index == 0) return true;
+	}
+	else return false;
+	if (validArgChar(str, '\\', index - 1))
+		return false;
+	return true;
+}
+
+LPWSTR extractArgString(LPWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
 	UINT64 str_len = wcslen(str);
 
-	LPWSTR result = NULL;
 	WCHAR symbol;
 	int trim_start, trim_end;
 	if (str[startIndex] == '"' || str[startIndex] == '\'') {
@@ -46,8 +47,7 @@ LPWSTR extractString(LPWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
 			trim_start = trim_end = 0;
 			break;
 		}
-		//WCHAR c = str[index];
-		if (validChar(str, symbol, index)) {
+		if (validArgChar(str, symbol, index)) {
 			index--;
 			index += trim_end;
 			*endIndex = index + 1;
@@ -55,17 +55,11 @@ LPWSTR extractString(LPWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
 		}
 		index++;
 	}
-	result = subString(str, startIndex + trim_start, index - trim_end);
-	/*result = malloc(((index - trim_end) - (startIndex + trim_start) + 2) * sizeof(WCHAR));
-	UINT64 p_result;
-	for (p_result = 0; p_result <= (index - trim_end) - (startIndex + trim_start); p_result++) {
-		result[p_result] = str[(startIndex + trim_start) + p_result];
-	}
-	result[p_result] = '\0';*/
+	LPWSTR result = subString(str, startIndex + trim_start, index - trim_end);
 	return result;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow)
 {
 	enum ArgType {
 		ARG_NONE = 0,
@@ -76,17 +70,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	bool waitExit = false;
 
 
-	//pCmdLine = __TEXT("cmd /k ping localhost");
-	//pCmdLine = __TEXT("\"cmd /k ping localhost\"");
-	//pCmdLine = __TEXT("cmd /k \"ping localhost\"");
-	//pCmdLine = __TEXT("-d \"C:\\Program Files\" -w cmd /k ping localhost");
-	//pCmdLine = __TEXT("-d . -w cmd /k ping localhost");
-	//pCmdLine = __TEXT("-w cmd /k ping localhost");
-	UINT cmdLineLen = wcslen(pCmdLine);
+	//pCmdLine = L"cmd /k ping localhost";
+	//pCmdLine = L"\"cmd /k ping localhost\"";
+	//pCmdLine = L"cmd /k \"ping localhost\"";
+	//pCmdLine = L"-d \"C:\\Program Files\" -w cmd /k ping localhost";
+	//pCmdLine = L"-d . -w cmd /k ping localhost";
+	//pCmdLine = L"-w cmd /k ping localhost";
+	UINT64 cmdLineLen = wcslen(pCmdLine);
 	LPWSTR commandLine = NULL;
-	for (UINT i = 0; i < cmdLineLen; ) {
-		UINT end = 0;
-		PWSTR value = extractString(pCmdLine, i, &end);
+	for (UINT64 i = 0; i < cmdLineLen; ) {
+		UINT64 end = 0;
+		PWSTR value = extractArgString(pCmdLine, i, &end);
 
 		if (nextArg != ARG_NONE) {
 			switch (nextArg) {
@@ -109,20 +103,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 				nextArg = ARG_WORKDIR;
 				break;
 			}
+			//free(value);
 		}
 		// options end
-		else if (validChar(pCmdLine, '"', i)) {
+		else if (validArgChar(pCmdLine, '"', i) || validArgChar(pCmdLine, '\'', i)) {
 			commandLine = value;
 			break;
 		}
 		else {
+			//free(value);
 			commandLine = subString(pCmdLine, i, cmdLineLen - 1);
 			break;
 		}
 		i = end;
 	}
 
-	STARTUPINFO si;
+	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	ZeroMemory(&si, sizeof(si));
 	ZeroMemory(&pi, sizeof(pi));
@@ -148,7 +144,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	  [in]                LPSTARTUPINFOW        lpStartupInfo,
 	  [out]               LPPROCESS_INFORMATION lpProcessInformation
 	); */
-	if (CreateProcess(
+	if (CreateProcessW(
 		NULL, commandLine,
 		NULL, NULL,
 		FALSE, CREATE_NEW_CONSOLE,
@@ -159,6 +155,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		if (waitExit) WaitForSingleObject(pi.hProcess, INFINITE);
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
+		free(commandLine);
+		free(workingDir);
 	}
 	else exitcode = GetLastError();
 
