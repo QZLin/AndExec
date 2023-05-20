@@ -13,96 +13,90 @@ bool validChar(LPWSTR str, WCHAR character, UINT64 index) {
 	return true;
 }
 
-PWSTR extractString(PWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
+LPWSTR subString(LPWSTR str, UINT64 startIndex, UINT64 endIndex) {
+	LPWSTR result = malloc((endIndex - startIndex + 1) * sizeof(WCHAR));
+	UINT64 i;
+	for (i = 0; i <= endIndex - startIndex; i++) result[i] = str[startIndex + i];
+	result[i] = '\0';
+	return result;
+}
+
+LPWSTR extractString(LPWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
 	UINT64 str_len = wcslen(str);
 
 	LPWSTR result = NULL;
 	WCHAR symbol;
-	int sub_start;
-	int sub_end = 0;
-	UINT64 index = startIndex;
-	if (str[startIndex] == '"') {
-		symbol = '"';
-		index++;
-		sub_start = 1;
-	}
-	else if (str[startIndex] == '\'') {
-		symbol = '\'';
-		index++;
-		sub_start = 1;
+	int trim_start, trim_end;
+	if (str[startIndex] == '"' || str[startIndex] == '\'') {
+		symbol = str[startIndex];
+		trim_start = 1;
+		trim_end = 2;
 	}
 	else {
 		symbol = ' ';
-		sub_start = 0;
+		trim_start = 0;
+		trim_end = 1;
 	}
 
+	UINT64 index = startIndex + trim_start;
 	while (true) {
 		if (index >= str_len) {
-			*endIndex = index - 1;
+			*endIndex = index;
+			index--;
+			trim_start = trim_end = 0;
 			break;
 		}
-		WCHAR c = str[index];
-		if (c == symbol && validChar(str, symbol, index)) {
-			*endIndex = index;
-			sub_end = 1;
+		//WCHAR c = str[index];
+		if (validChar(str, symbol, index)) {
+			index--;
+			index += trim_end;
+			*endIndex = index + 1;
 			break;
 		}
 		index++;
 	}
-	UINT64 result_size = ((index - sub_end) - (startIndex + sub_start) + 1) * sizeof(WCHAR);
-	result = malloc(result_size + sizeof(WCHAR));
-
-	UINT64 p_result = 0;
-	for (UINT64 i = startIndex + sub_start; i < index - sub_end + 1; i++) {
-		result[p_result] = str[i];
-		p_result++;
+	result = subString(str, startIndex + trim_start, index - trim_end);
+	/*result = malloc(((index - trim_end) - (startIndex + trim_start) + 2) * sizeof(WCHAR));
+	UINT64 p_result;
+	for (p_result = 0; p_result <= (index - trim_end) - (startIndex + trim_start); p_result++) {
+		result[p_result] = str[(startIndex + trim_start) + p_result];
 	}
-	result[p_result] = '\0';
+	result[p_result] = '\0';*/
 	return result;
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	UINT cmdLineLen = wcslen(pCmdLine);
-
-	LPWSTR fullCmd = GetCommandLine();
-	UINT64 fullCmdLen = wcslen(fullCmd);
-
 	enum ArgType {
 		ARG_NONE = 0,
-		ARG_WORKDIR,
-		ARG_FLAG,
-		ARG_SELF
+		ARG_WORKDIR
 	};
 	enum ArgType nextArg = ARG_NONE;
 	LPWSTR workingDir = NULL;
 	bool waitExit = false;
 
 
-
-	LPWSTR realCmd = malloc((fullCmdLen + 1) * sizeof(WCHAR));
-	UINT p_realCmd = 0;
-
-	// cmd /k ping localhost
-	// "cmd /k ping localhost"
-	// cmd /k "ping localhost"
-	// -d "C:\Program Files" -w cmd /k ping localhost
-	// -d . -w cmd /k ping localhost
-	// -w cmd /k ping localhost
-
-	pCmdLine = __TEXT("cmd /k ping localhost");
+	//pCmdLine = __TEXT("cmd /k ping localhost");
+	//pCmdLine = __TEXT("\"cmd /k ping localhost\"");
+	//pCmdLine = __TEXT("cmd /k \"ping localhost\"");
+	//pCmdLine = __TEXT("-d \"C:\\Program Files\" -w cmd /k ping localhost");
+	//pCmdLine = __TEXT("-d . -w cmd /k ping localhost");
+	//pCmdLine = __TEXT("-w cmd /k ping localhost");
+	UINT cmdLineLen = wcslen(pCmdLine);
 	LPWSTR commandLine = NULL;
-	for (UINT64 i = 0; i < cmdLineLen; ) {
-		UINT64 end = 0;
+	for (UINT i = 0; i < cmdLineLen; ) {
+		UINT end = 0;
 		PWSTR value = extractString(pCmdLine, i, &end);
 
 		if (nextArg != ARG_NONE) {
 			switch (nextArg) {
 			case ARG_WORKDIR:
 				workingDir = value;
+				nextArg = ARG_NONE;
 				break;
 			default:
 				free(value);
+				nextArg = ARG_NONE;
 			}
 		}
 		else if (value[0] == '-') {
@@ -122,114 +116,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			break;
 		}
 		else {
-			commandLine = malloc((cmdLineLen - i + 1) * sizeof(WCHAR));
-			UINT64 j;
-			for (j = 0; i + j < cmdLineLen; j++) commandLine[j] = pCmdLine[i + j];
-			commandLine[j] = '\0';
+			commandLine = subString(pCmdLine, i, cmdLineLen - 1);
 			break;
 		}
-		i = end + 1;
+		i = end;
 	}
-
-	UINT64 cmdlSize = (cmdLineLen + 1) * sizeof(WCHAR);
-	LPWSTR cmdl = malloc(cmdlSize);
-	UINT64 p_cmdl = 0;
-
-
-
-
-
-	//int self_head_hit = 0;
-	//int non_space_hit = 0;
-	for (UINT64 i = 0; i < cmdLineLen; i++) {
-		//WCHAR c = pCmdLine[i];
-
-		if (validChar(pCmdLine, '-', i)) {
-			switch (pCmdLine[i + 1]) {
-			case 'w':
-				waitExit = true;
-				nextArg = ARG_NONE;
-				i++;
-				break;
-			case 'd':
-				nextArg = ARG_WORKDIR;
-				i++;
-				break;
-			}
-		}
-		else if (nextArg != ARG_NONE) {
-
-			UINT64 end = 0;
-			PWSTR value = extractString(pCmdLine, i, &end);
-
-			switch (nextArg) {
-			case ARG_WORKDIR:
-				workingDir = value;
-				break;
-			default:
-				free(value);
-			}
-			nextArg = ARG_NONE;
-			i += end;
-		}
-	}
-	/*
-#define L_IS(index,value) ((int)index-1>0 && realCmd[index-1]==value)
-#define N_IS(index,value) ((int)index+1<p_realCmd && realCmd[index+1]==value)
-	bool quotation_hit = false;
-	nextArg = ARG_NONE;
-	for (UINT i = 0; i < p_realCmd; i++) {
-		WCHAR c = realCmd[i];
-		if (c == '"')
-			quotation_hit = true;
-		if (!quotation_hit && c == '-' && !L_IS(i, '\\') && i + 1 < p_realCmd) {
-			switch (realCmd[i + 1]) {
-			case 'w':
-				waitExit = true;
-				nextArg = ARG_NONE;
-				i++;
-				break;
-			case 'd':
-				nextArg = ARG_WORKDIR;
-				i++;
-				break;
-			}
-		}
-		else if (nextArg != ARG_NONE && c == ' ' && !L_IS(i, '\\')) {
-			UINT64 index_start = i + 1;
-			UINT64 len = p_realCmd - index_start;
-			PWSTR arg_unit = malloc((len + 1) * sizeof(WCHAR));
-
-			UINT64 j;
-			for (j = 0; j < len; j++) {
-				arg_unit[j] = realCmd[index_start + j];
-				if (realCmd[index_start + j + 1] == ' ') {
-					arg_unit = realloc(arg_unit, (j + 2) * sizeof(WCHAR));
-					break;
-				}
-			}
-			arg_unit[j + 1] = '\0';
-			i += j + 1;
-			switch (nextArg) {
-			case ARG_WORKDIR:
-				workingDir = arg_unit;
-				break;
-			default:
-				free(arg_unit);
-			}
-			nextArg = ARG_NONE;
-		}
-		if (nextArg == ARG_NONE) {
-			if (non_space_hit == 0 && c != ' ') non_space_hit++;
-			if (non_space_hit > 0) {
-				cmdl[p_cmdl] = c;
-				p_cmdl++;
-				cmdl[p_cmdl] = '\0';
-			}
-		}
-	}
-	if (cmdl == NULL) { exit(2); }
-	cmdl[p_cmdl] = '\0';*/
 
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
@@ -256,11 +147,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 	  [in]                LPSTARTUPINFOW        lpStartupInfo,
 	  [out]               LPPROCESS_INFORMATION lpProcessInformation
-	);
-	*/
-
+	); */
 	if (CreateProcess(
-		NULL, cmdl,
+		NULL, commandLine,
 		NULL, NULL,
 		FALSE, CREATE_NEW_CONSOLE,
 		NULL, workingDir,
