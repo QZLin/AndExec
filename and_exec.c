@@ -3,162 +3,155 @@
 #include <wchar.h>
 #include <stdbool.h>
 
-
-
 LPWSTR subString(LPWSTR str, UINT64 startIndex, UINT64 endIndex) {
-	LPWSTR result = malloc((endIndex - startIndex + 1) * sizeof(WCHAR));
-	UINT64 i;
-	for (i = 0; i <= endIndex - startIndex; i++) result[i] = str[startIndex + i];
-	result[i] = '\0';
-	return result;
+    LPWSTR result = malloc((endIndex - startIndex + 1) * sizeof(WCHAR));
+    UINT64 i;
+    for (i = 0; i < endIndex - startIndex; i++) result[i] = str[startIndex + i];
+    result[i] = '\0';
+    return result;
 }
 
 bool validArgChar(LPWSTR str, WCHAR character, UINT64 index) {
-	if (str[index] == character) {
-		if (index == 0) return true;
-	}
-	else return false;
-	if (validArgChar(str, '\\', index - 1))
-		return false;
-	return true;
+    if (str[index] == character) {
+        if (index == 0) return true;
+    } else return false;
+    if (validArgChar(str, '\\', index - 1))
+        return false;
+    return true;
 }
 
-LPWSTR extractArgString(LPWSTR str, UINT64 startIndex, OUT UINT64* endIndex) {
-	UINT64 str_len = wcslen(str);
+// andexec :commandline
+// andexec :commandline:workdir
+// andexec :[flags]:commandline:workdir
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow) {
+    LPWSTR commandLine = NULL;
+    LPWSTR workingDir = NULL;
 
-	WCHAR symbol;
-	int trim_start, trim_end;
-	if (str[startIndex] == '"' || str[startIndex] == '\'') {
-		symbol = str[startIndex];
-		trim_start = 1;
-		trim_end = 2;
-	}
-	else {
-		symbol = ' ';
-		trim_start = 0;
-		trim_end = 1;
-	}
+    bool waitExit = false;
 
-	UINT64 index = startIndex + trim_start;
-	while (true) {
-		if (index >= str_len) {
-			*endIndex = index;
-			index--;
-			trim_start = trim_end = 0;
-			break;
-		}
-		if (validArgChar(str, symbol, index)) {
-			index--;
-			index += trim_end;
-			*endIndex = index + 1;
-			break;
-		}
-		index++;
-	}
-	LPWSTR result = subString(str, startIndex + trim_start, index - trim_end);
-	return result;
-}
+    int argvCount;
+    LPWSTR *argv = CommandLineToArgvW(pCmdLine, &argvCount);
+    switch (argvCount) {
+        case 0:
+            exit(2);
+        case 1:
+            commandLine = pCmdLine;
+            break;
+        case 2:
+            commandLine = argv[0];
+            workingDir = argv[1];
+            break;
+        case 3:
+            commandLine = argv[0];
+            workingDir = argv[1];
+            LPWSTR flags = argv[2];
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow)
-{
-	enum ArgType {
-		ARG_NONE = 0,
-		ARG_WORKDIR
-	};
-	enum ArgType nextArg = ARG_NONE;
-	LPWSTR workingDir = NULL;
-	bool waitExit = false;
+            UINT64 flagsLen = wcslen(flags);
+            for (UINT64 i = 0; i < flagsLen; i++)
+                switch (flags[i]) {
+                    case 'w':
+                        waitExit = TRUE;
+                        break;
+                }
+            break;
+        default:
+            exit(3);
+    }
 
 
-	//pCmdLine = L"cmd /k ping localhost";
-	//pCmdLine = L"\"cmd /k ping localhost\"";
-	//pCmdLine = L"cmd /k \"ping localhost\"";
-	//pCmdLine = L"-d \"C:\\Program Files\" -w cmd /k ping localhost";
-	//pCmdLine = L"-d . -w cmd /k ping localhost";
-	//pCmdLine = L"-w cmd /k ping localhost";
-	UINT64 cmdLineLen = wcslen(pCmdLine);
-	LPWSTR commandLine = NULL;
-	for (UINT64 i = 0; i < cmdLineLen; ) {
-		UINT64 end = 0;
-		PWSTR value = extractArgString(pCmdLine, i, &end);
+//    LPWSTR test1 = L"0123456789";
+//    LPWSTR r1 = subString(test1, 0, 1);
 
-		if (nextArg != ARG_NONE) {
-			switch (nextArg) {
-			case ARG_WORKDIR:
-				workingDir = value;
-				nextArg = ARG_NONE;
-				break;
-			default:
-				free(value);
-				nextArg = ARG_NONE;
-			}
-		}
-		else if (value[0] == '-') {
-			switch (value[1]) {
-			case 'w':
-				waitExit = true;
-				nextArg = ARG_NONE;
-				break;
-			case 'd':
-				nextArg = ARG_WORKDIR;
-				break;
-			}
-			//free(value);
-		}
-		// options end
-		else if (validArgChar(pCmdLine, '"', i) || validArgChar(pCmdLine, '\'', i)) {
-			commandLine = value;
-			break;
-		}
-		else {
-			//free(value);
-			commandLine = subString(pCmdLine, i, cmdLineLen - 1);
-			break;
-		}
-		i = end;
-	}
+    /*UINT64 cmdLineLen = wcslen(pCmdLine);
+    if (cmdLineLen == 0)
+        exit(2);
 
-	STARTUPINFOW si;
-	PROCESS_INFORMATION pi;
-	ZeroMemory(&si, sizeof(si));
-	ZeroMemory(&pi, sizeof(pi));
-	DWORD exitcode = 0;
-	/* create process with new console */
-	si.cb = sizeof(si);
-	si.dwFlags = STARTF_USESHOWWINDOW;
-	si.wShowWindow = SW_HIDE;
-	/*
-	  BOOL CreateProcessW(
-	  [in, optional]      LPCWSTR               lpApplicationName,
-	  [in, out, optional] LPWSTR                lpCommandLine,
+    const WCHAR SEP = pCmdLine[0];
 
-	  [in, optional]      LPSECURITY_ATTRIBUTES lpProcessAttributes,
-	  [in, optional]      LPSECURITY_ATTRIBUTES lpThreadAttributes,
+    int sepCount = 0;
+    int sepLocMaxi = 10;
+    UINT64 *sepLocs = malloc(sepLocMaxi * sizeof(UINT64));
+    for (UINT64 i = 0; i < cmdLineLen; i++) {
+        if (pCmdLine[i] != SEP)
+            continue;
+        if (sepCount < sepLocMaxi)
+            sepLocs[sepCount] = i;
+        else {
+            sepLocMaxi += 10;
+            realloc(sepLocs, sepLocMaxi * sizeof(UINT64));
+            sepLocs[sepCount] = i;
+        }
+        sepCount++;
+    }*/
 
-	  [in]                BOOL                  bInheritHandles,
-	  [in]                DWORD                 dwCreationFlags,
 
-	  [in, optional]      LPVOID                lpEnvironment,
-	  [in, optional]      LPCWSTR               lpCurrentDirectory,
+    /*switch (sepCount) {
+        case 0:
+            commandLine = pCmdLine;
+            break;
+        case 1:
+            commandLine = subString(pCmdLine, 1, sepLocs[0]);
+        case 2:
+            commandLine = subString(pCmdLine, 0, sepLocs[0]);
+            workingDir = subString(pCmdLine, sepLocs[1] + 1, cmdLineLen);
+            break;
+        case 3:
+            LPWSTR flags = subString(pCmdLine, 0, sepLocs[0]);
+            UINT64 flagsLen = wcslen(flags);
+            for (UINT64 i = 0; i < flagsLen; i++) {
+                switch (flags[i]) {
+                    case FLAGWaitExit:
+                        waitExit = TRUE;
+                        break;
+                }
 
-	  [in]                LPSTARTUPINFOW        lpStartupInfo,
-	  [out]               LPPROCESS_INFORMATION lpProcessInformation
-	); */
-	if (CreateProcessW(
-		NULL, commandLine,
-		NULL, NULL,
-		FALSE, CREATE_NEW_CONSOLE,
-		NULL, workingDir,
-		&si, &pi
-	))
-	{
-		if (waitExit) WaitForSingleObject(pi.hProcess, INFINITE);
-		CloseHandle(pi.hProcess);
-		CloseHandle(pi.hThread);
-		free(commandLine);
-		free(workingDir);
-	}
-	else exitcode = GetLastError();
+            }
+            commandLine = subString(pCmdLine, sepLocs[0] + 1, sepLocs[1]);
+            workingDir = subString(pCmdLine, sepLocs[1] + 1, cmdLineLen);
+            break;
+        default:
+            break;
+    }*/
 
-	ExitProcess(exitcode);
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&si, sizeof(si));
+    ZeroMemory(&pi, sizeof(pi));
+    DWORD exitcode = 0;
+    /* create process with new console */
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    /*
+      BOOL CreateProcessW(
+      [in, optional]      LPCWSTR               lpApplicationName,
+      [in, out, optional] LPWSTR                lpCommandLine,
+
+      [in, optional]      LPSECURITY_ATTRIBUTES lpProcessAttributes,
+      [in, optional]      LPSECURITY_ATTRIBUTES lpThreadAttributes,
+
+      [in]                BOOL                  bInheritHandles,
+      [in]                DWORD                 dwCreationFlags,
+
+      [in, optional]      LPVOID                lpEnvironment,
+      [in, optional]      LPCWSTR               lpCurrentDirectory,
+
+      [in]                LPSTARTUPINFOW        lpStartupInfo,
+      [out]               LPPROCESS_INFORMATION lpProcessInformation
+    ); */
+    if (CreateProcessW(
+            NULL, commandLine,
+            NULL, NULL,
+            FALSE, CREATE_NEW_CONSOLE,
+            NULL, workingDir,
+            &si, &pi
+    )) {
+        if (waitExit) WaitForSingleObject(pi.hProcess, INFINITE);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+//        free(commandLine);
+//        free(workingDir);
+    } else exitcode = GetLastError();
+
+    ExitProcess(exitcode);
 }
