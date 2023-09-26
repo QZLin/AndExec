@@ -4,16 +4,14 @@ Use `&Exec` you can run windows console application background without popup cmd
 
 ## Usage
 
+** Different image name will lead to different behaviour
+
 ```bash
-AndExec.exe <CommandLine> [WorkDir] [Flags]
-AndExec.exe <CommandLine>|<WorkDir>
-AndExec.exe [Flags]|<CommandLine>|<WorkDir>
-#Example:
-AndExec cmd /k "ping example.com"
-AndExec python -m http.server|C:\User\Tester\Desktop
-AndExec w|node test.js -a -b -c|C:\User\Tester\Desktop
-# \|
-AndExec w|cmd /c ls | grep a|C:\User\Tester\Desktop
+andexec <CommandLine> # normal behaviour
+andexec_d <CommandLine> <WorkDir> # specify workdir
+andexec_w <CommandLine> # wait subprocess exit
+andexec_wd <CommandLine> <WorkDir> # specify workdir and wait subprocess exit
+
 ```
 
 ## Build Requirements
