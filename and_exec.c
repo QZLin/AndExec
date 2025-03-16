@@ -4,31 +4,17 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-LPWSTR SelfName() {
+static LPWSTR SelfName() {
 	int argc = 0;
 	LPWSTR* args = CommandLineToArgvW(GetCommandLine(), &argc);
-	LPWSTR fullname = args[0];
-	int fullnameLen = wcsnlen(fullname, INT_MAX);
-	int nameLen;
-	int index = 0;
-	for (int i = fullnameLen; i >= 0; i--) {
-		if (fullname[i] == '\\') {
-			index = i;
+	LPWSTR r = wcsrchr(args[0], L'\\');
+	for (int i = 1;; i++) {
+		if (r[i] == '\0')
 			break;
-		}
+		r[i] = tolower(r[i]);
 	}
-	nameLen = fullnameLen - index;
-
-	PWSTR name = (PWSTR)malloc(sizeof(WCHAR) * (nameLen + 1));
-	wcsncpy_s(name, nameLen + 1, fullname + index, nameLen);
-	if (name[0] == '\\') {
-		name++;
-		nameLen--;
-	}
-	for (int i = 0; i < nameLen; i++)
-		name[i] = towlower(name[i]);
 	// TODO: remove .exe suffix
-	return name;
+	return r+1;
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow) {
