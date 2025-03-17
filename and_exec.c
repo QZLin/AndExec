@@ -4,32 +4,37 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-static LPWSTR SelfName() {
-	int argc = 0;
-	LPWSTR* args = CommandLineToArgvW(GetCommandLine(), &argc);
-	LPWSTR r = wcsrchr(args[0], L'\\');
-	for (int i = 1;; i++) {
-		if (r[i] == '\0')
+static LPWSTR SelfName(LPWSTR arg) {
+	size_t arg_length = wcslen(arg);
+	LPWSTR image_name = wcsrchr(arg, L'\\');
+	LPWSTR result = (LPWSTR)malloc((&arg + arg_length - &image_name) * sizeof(WCHAR));
+	if (result == NULL)
+		exit(-1);
+	image_name++;
+	for (int i = 0;; i++) {
+		result[i] = tolower(image_name[i]);
+		if (image_name[i] == '\0')
 			break;
-		r[i] = tolower(r[i]);
 	}
 	// TODO: remove .exe suffix
-	return r+1;
+	return result;
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow) {
+	int argc = 0;
+	LPWSTR* args = CommandLineToArgvW(GetCommandLine(), &argc);
 	LPWSTR commandLine = NULL;
 	LPWSTR workingDir = NULL;
 
 	bool hasWorkDir = false;
 	bool waitExit = false;
 
-	LPWSTR selfName = SelfName();
+	LPWSTR selfName = SelfName(args[0]);
 
 	// andexec <commandline>
 	// andexec_d <commandline> <workdir>
 	// andexec_w <commandline> # WaitExit
-	// andexec_dw <commandline> <workdir> # WaitExit
+	// andexec_wd <commandline> <workdir> # WaitExit
 
 	if (wcscmp(selfName, L"andexec_d.exe") == 0) {
 		hasWorkDir = true;
@@ -47,17 +52,16 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLin
 	}
 
 	if (hasWorkDir) {
-		int argc;
-		LPWSTR* argv = CommandLineToArgvW(pCmdLine, &argc);
 		if (argc < 2) {
-			printf("err:2 args is required");
+			printf("err: require 2 arguments");
 			exit(2);
 		}
-		commandLine = argv[0];
-		workingDir = argv[1];
+		commandLine = args[0];
+		workingDir = args[1];
 	}
 
 
+	free(selfName);
 	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	ZeroMemory(&si, sizeof(si));
@@ -89,13 +93,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLin
 		NULL, NULL,
 		FALSE, CREATE_NEW_CONSOLE,
 		NULL, workingDir,
-		&si, &pi
-	)) {
+		&si, &pi)
+		)
+	{
 		if (waitExit) WaitForSingleObject(pi.hProcess, INFINITE);
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 	}
-	else exitcode = GetLastError();
+	else
+		exitcode = GetLastError();
 
 	ExitProcess(exitcode);
 }
