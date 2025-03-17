@@ -8,19 +8,22 @@ static LPWSTR SelfName(LPWSTR arg) {
 	size_t arg_length = wcslen(arg);
 	LPWSTR image_name = wcsrchr(arg, L'\\');
 	LPWSTR result = (LPWSTR)malloc((&arg + arg_length - &image_name) * sizeof(WCHAR));
-	if (result == NULL)
-		exit(-1);
+	if (result == NULL) exit(-1);
 	image_name++;
 	for (int i = 0;; i++) {
 		result[i] = tolower(image_name[i]);
-		if (image_name[i] == '\0')
-			break;
+		if (image_name[i] == '\0') break;
 	}
 	// TODO: remove .exe suffix
 	return result;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow) {
+int wWinMain(
+	_In_ HINSTANCE hInstance,
+	_In_opt_ HINSTANCE hPrevInstance,
+	_In_ LPWSTR lpCmdLine,
+	_In_ int nShowCmd
+) {
 	int argc = 0;
 	LPWSTR* args = CommandLineToArgvW(GetCommandLine(), &argc);
 	LPWSTR commandLine = NULL;
@@ -40,7 +43,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLin
 		hasWorkDir = true;
 	}
 	else if (wcscmp(selfName, L"andexec_w.exe") == 0) {
-		commandLine = pCmdLine;
+		commandLine = lpCmdLine;
 		waitExit = true;
 	}
 	else if (wcscmp(selfName, L"andexec_wd.exe") == 0) {
@@ -48,7 +51,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLin
 		hasWorkDir = true;
 	}
 	else {
-		commandLine = pCmdLine;
+		commandLine = lpCmdLine;
 	}
 
 	if (hasWorkDir) {
