@@ -1,0 +1,10 @@
+.git/**
+.vs/**
+build/**
+x64/**
+cmake-build-debug/**
+cmake-build-release/**
+
+*.patch
+*.vcx*
+LICENSE
