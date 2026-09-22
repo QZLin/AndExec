@@ -1,0 +1,4 @@
+// app.rc
+#include <winres.h>
+
+IDI_APP_ICON ICON "app.ico"

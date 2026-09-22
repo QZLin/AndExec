@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(andexec LANGUAGES C)
 
 function(add_andexec_variant target)
-    add_executable(${target} WIN32 and_exec.c)
+    add_executable(${target} WIN32 and_exec.c app.rc)
     # 全部使用宽字符 WinAPI,与 wWinMain / CreateProcessW 一致
     target_compile_definitions(${target} PRIVATE UNICODE _UNICODE ${ARGN})
     if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
