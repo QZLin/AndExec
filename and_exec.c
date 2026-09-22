@@ -4,11 +4,6 @@
 #include <wchar.h>
 #include <windows.h>
 
-#if defined(FLAG_ENABLE_WORKDIR) || defined(FLAG_ENABLE_WAIT)
-#else
-#define MODE_DEFAULT
-#endif
-
 int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
     int argc = 0;
     LPWSTR* args = CommandLineToArgvW(GetCommandLine(), &argc);
@@ -16,7 +11,7 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
     LPWSTR workingDir = NULL;
 
 #ifdef FLAG_ENABLE_WORKDIR
-    if(argc < 2) {
+    if(argc < 3) {
         printf("err: require 2 arguments");
         exit(2);
     }
@@ -53,7 +48,7 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 	  [out]               LPPROCESS_INFORMATION lpProcessInformation
 	); */
     if(CreateProcessW(NULL, commandLine, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, workingDir, &si, &pi)) {
-#ifdef FLAG_ENABLE_WORKDIR
+#ifdef FLAG_ENABLE_WAIT
         WaitForSingleObject(pi.hProcess, INFINITE);
 #endif
         CloseHandle(pi.hProcess);

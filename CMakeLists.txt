@@ -12,7 +12,7 @@ function(add_andexec_variant target)
     set_target_properties(${target} PROPERTIES OUTPUT_NAME ${target})
 endfunction()
 
-add_andexec_variant(andexec)                                         # 无define
-add_andexec_variant(andexec_d FLAG_ENABLE_WORKDIR)                   # 指定工作目录
-add_andexec_variant(andexec_w FLAG_ENABLE_WAIT)                      # 等待子进程退出
-add_andexec_variant(andexec_wd FLAG_ENABLE_WORKDIR FLAG_ENABLE_WAIT) # 指定工作目录+等待子进程退出
+add_andexec_variant(andexec)                                          # 无define
+add_andexec_variant(andexec_d FLAG_ENABLE_WORKDIR)                    # 指定工作目录
+add_andexec_variant(andexec_w FLAG_ENABLE_WAIT)                       # 等待子进程退出
+add_andexec_variant(andexec_wd FLAG_ENABLE_WAIT FLAG_ENABLE_WORKDIR ) # 等待子进程退出+指定工作目录
