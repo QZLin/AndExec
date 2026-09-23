@@ -1,20 +1,18 @@
 #include <process.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <wchar.h>
 #include <windows.h>
 
-int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nShowCmd) {
+int wWinMain(_In_ [[maybe_unused]] HINSTANCE hInstance, _In_opt_ [[maybe_unused]] HINSTANCE hPrevInstance,
+             _In_ LPWSTR lpCmdLine, _In_ [[maybe_unused]] int nShowCmd) {
     int argc = 0;
-    LPWSTR* args = CommandLineToArgvW(GetCommandLine(), &argc);
-    LPWSTR commandLine = NULL;
-    LPWSTR workingDir = NULL;
+    const LPWSTR* args = CommandLineToArgvW(GetCommandLine(), &argc);
+    LPWSTR commandLine = nullptr;
+    LPWSTR workingDir = nullptr;
 
 #ifdef FLAG_ENABLE_WORKDIR
-    if(argc < 3) {
-        printf("err: require 2 arguments");
+    if(argc < 3)
         exit(2);
-    }
     commandLine = args[1];
     workingDir = args[2];
 #else
@@ -47,7 +45,9 @@ int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 	  [in]                LPSTARTUPINFOW        lpStartupInfo,
 	  [out]               LPPROCESS_INFORMATION lpProcessInformation
 	); */
-    if(CreateProcessW(NULL, commandLine, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, workingDir, &si, &pi)) {
+    if(CreateProcessW(nullptr, commandLine, nullptr, nullptr, /**/
+                      FALSE, CREATE_NEW_CONSOLE, NULL, workingDir, /**/
+                      &si, &pi)) {
 #ifdef FLAG_ENABLE_WAIT
         WaitForSingleObject(pi.hProcess, INFINITE);
 #endif

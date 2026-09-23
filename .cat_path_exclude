@@ -1,5 +1,6 @@
 .git/**
 .vs/**
+.idea/**
 build/**
 x64/**
 cmake-build-debug/**
