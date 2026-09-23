@@ -2,8 +2,8 @@ name: Build & Release
 
 on:
   push:
-    branches: [ "**" ]
-    tags: [ "v*" ]
+    branches: ["**"]
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -30,9 +30,7 @@ jobs:
           cp README.md LICENSE dist/ 2>/dev/null || true
 
       - name: Zip artifacts
-        shell: bash
-        run: |
-          zip -r andexec.zip dist
+        run: 7z a -tzip andexec.zip dist
 
       # 每次 push/PR 都存档,方便随时下载验证
       - uses: actions/upload-artifact@v4
